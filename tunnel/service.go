@@ -173,8 +173,10 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 	// Apply split tunneling configuration: ensure allowedIPs includes default routes
 	// This is required for split tunneling to work correctly - WireGuard needs to route
 	// all traffic through the tunnel, then we use route manipulation to exclude/include specific routes
+	// WireGuard on Windows creates routes from allowedIPs (see addressconfig.go lines 81-103),
+	// so without default routes (0.0.0.0/0, ::/0), traffic won't be routed through the tunnel
 	if config.Interface.SplitTunneling != nil && config.Interface.SplitTunneling.Mode != conf.SplitModeAllSites {
-		log.Println("Split tunneling enabled - ensuring allowedIPs includes default routes")
+		log.Println("Split tunneling enabled - forcing allowedIPs to include default routes (0.0.0.0/0, ::/0)")
 		for i := range config.Peers {
 			peer := &config.Peers[i]
 
@@ -183,15 +185,15 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 			hasDefault6 := false
 			for _, allowedip := range peer.AllowedIPs {
 				if allowedip.Cidr == 0 {
-					if len(allowedip.IP) == 4 {
+					if len(allowedip.IP) == 4 && allowedip.IP.Equal(net.IPv4zero) {
 						hasDefault4 = true
-					} else if len(allowedip.IP) == 16 {
+					} else if len(allowedip.IP) == 16 && allowedip.IP.Equal(net.IPv6zero) {
 						hasDefault6 = true
 					}
 				}
 			}
 
-			// Add default routes if missing
+			// Force default routes to be present - add if missing
 			if !hasDefault4 {
 				peer.AllowedIPs = append(peer.AllowedIPs, conf.IPCidr{
 					IP:   net.IPv4zero,
@@ -206,6 +208,9 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 				})
 				log.Printf("Split tunneling: Added ::/0 to peer %d allowedIPs", i)
 			}
+			
+			// Log final state for debugging
+			log.Printf("Split tunneling: Peer %d allowedIPs after ensuring default routes: %v", i, peer.AllowedIPs)
 		}
 	}
 

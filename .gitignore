@@ -2,3 +2,5 @@
 tunnel.dll
 tunnel.h
 x64/
+tunnel/udptlspipe/DEEP_REVIEW.md
+tunnel/udptlspipe/VERIFICATION_REPORT.md

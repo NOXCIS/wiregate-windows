@@ -237,7 +237,7 @@ func (m *sessionManager) getOrCreate(key string, create func() *clientSession) *
 	session, ok := m.sessions[key]
 	m.mu.RUnlock()
 
-	if ok && session.isAlive() {
+	if ok && session.isAlive() && session.hasActiveConnection() {
 		return session
 	}
 
@@ -246,8 +246,14 @@ func (m *sessionManager) getOrCreate(key string, create func() *clientSession) *
 
 	// Double-check after acquiring write lock
 	session, ok = m.sessions[key]
-	if ok && session.isAlive() {
-		return session
+	if ok {
+		if !session.isAlive() {
+			// Clean up dead session
+			delete(m.sessions, key)
+			session = nil
+		} else if session.hasActiveConnection() {
+			return session
+		}
 	}
 
 	// Create new session
@@ -452,9 +458,17 @@ func (s *clientSession) writer() {
 				err := s.wsConn.WriteMessage(websocket.BinaryMessage, framedData)
 				if err != nil {
 					s.logger.Printf("udptlspipe: WebSocket write error: %v", err)
+					// Connection failed, signal main loop to exit
+					s.wsConn = nil
+					s.wsMu.Unlock()
+					// Cancel context to signal connection failure
+					s.cancel()
+					return
 				}
+				s.wsMu.Unlock()
+			} else {
+				s.wsMu.Unlock()
 			}
-			s.wsMu.Unlock()
 		}
 	}
 }
@@ -494,6 +508,13 @@ func (s *clientSession) isAlive() bool {
 	s.aliveMu.RLock()
 	defer s.aliveMu.RUnlock()
 	return s.alive
+}
+
+// hasActiveConnection checks if the WebSocket connection is active
+func (s *clientSession) hasActiveConnection() bool {
+	s.wsMu.Lock()
+	defer s.wsMu.Unlock()
+	return s.wsConn != nil
 }
 
 func (s *clientSession) close() {

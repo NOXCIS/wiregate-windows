@@ -33,6 +33,11 @@ const (
 //	<2 bytes>: padding length (big-endian)
 //	<random padding bytes>
 func packMessage(data []byte) []byte {
+	// Validate and truncate data length if necessary
+	if len(data) > MaxMessageLength {
+		data = data[:MaxMessageLength]
+	}
+
 	// Calculate padding length
 	minLength := MinMessageLength - len(data)
 	if minLength <= 0 {
@@ -65,13 +70,29 @@ func unpackMessage(msg []byte) ([]byte, error) {
 
 	// Read data length
 	dataLen := binary.BigEndian.Uint16(msg[:2])
-	if int(dataLen)+4 > len(msg) {
+	
+	// Validate data length against maximum
+	if dataLen > MaxMessageLength {
+		return nil, fmt.Errorf("data length %d exceeds maximum %d", dataLen, MaxMessageLength)
+	}
+	
+	dataOffset := 2 + int(dataLen)
+
+	if dataOffset+2 > len(msg) {
 		return nil, fmt.Errorf("invalid data length %d for message of %d bytes", dataLen, len(msg))
+	}
+
+	// Read and validate padding length
+	paddingLen := binary.BigEndian.Uint16(msg[dataOffset : dataOffset+2])
+	expectedTotalLen := dataOffset + 2 + int(paddingLen)
+
+	if expectedTotalLen != len(msg) {
+		return nil, fmt.Errorf("invalid message structure: expected %d bytes (data: %d, padding: %d), got %d", expectedTotalLen, dataLen, paddingLen, len(msg))
 	}
 
 	// Extract the data (skip the padding)
 	data := make([]byte, dataLen)
-	copy(data, msg[2:2+dataLen])
+	copy(data, msg[2:dataOffset])
 
 	return data, nil
 }

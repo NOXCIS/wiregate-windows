@@ -121,6 +121,25 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 		return
 	}
 	config.DeduplicateNetworkEntries()
+	
+	// Force allowedIPs to 0.0.0.0/0, ::/0 when split tunneling is enabled
+	// This ensures split tunneling works correctly, following Apple client approach
+	if config.Interface.SplitTunneling != nil && config.Interface.SplitTunneling.Mode != conf.SplitModeAllSites {
+		log.Println("Split tunneling enabled, forcing allowedIPs to full tunnel (0.0.0.0/0, ::/0)")
+		for i := range config.Peers {
+			originalAllowedIPs := make([]conf.IPCidr, len(config.Peers[i].AllowedIPs))
+			copy(originalAllowedIPs, config.Peers[i].AllowedIPs)
+			log.Printf("Peer %d: Original allowedIPs: %v", i, originalAllowedIPs)
+			
+			// Force to full tunnel
+			config.Peers[i].AllowedIPs = []conf.IPCidr{
+				{IP: net.IPv4zero, Cidr: 0}, // 0.0.0.0/0
+				{IP: net.IPv6zero, Cidr: 0}, // ::/0
+			}
+			log.Printf("Peer %d: Forced allowedIPs to 0.0.0.0/0, ::/0 for split tunneling", i)
+		}
+	}
+	
 	err = CopyConfigOwnerToIPCSecurityDescriptor(service.Path)
 	if err != nil {
 		serviceError = services.ErrorLoadConfiguration

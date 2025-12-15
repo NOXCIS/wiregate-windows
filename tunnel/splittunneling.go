@@ -18,10 +18,15 @@ import (
 
 // SplitTunnelingManager handles split tunneling route configuration
 type SplitTunnelingManager struct {
-	luid          winipcfg.LUID
-	config        *conf.SplitTunnelingConfig
-	addedRoutes   []net.IPNet
-	resolvedSites map[string][]net.IP
+	luid              winipcfg.LUID
+	config            *conf.SplitTunnelingConfig
+	addedRoutes       []net.IPNet
+	resolvedSites     map[string][]net.IP
+	originalMetricV4  uint32
+	originalMetricV6  uint32
+	originalAutoMetricV4 bool
+	originalAutoMetricV6 bool
+	metricModified    bool
 }
 
 // NewSplitTunnelingManager creates a new split tunneling manager
@@ -64,7 +69,7 @@ func (m *SplitTunnelingManager) Apply() error {
 	return nil
 }
 
-// Remove removes all split tunneling routes
+// Remove removes all split tunneling routes and restores original interface metrics
 func (m *SplitTunnelingManager) Remove() error {
 	log.Printf("Split tunneling: Removing %d routes", len(m.addedRoutes))
 
@@ -75,6 +80,36 @@ func (m *SplitTunnelingManager) Remove() error {
 	}
 
 	m.addedRoutes = make([]net.IPNet, 0)
+	
+	// Restore original interface metrics if they were modified
+	if m.metricModified {
+		// Restore IPv4 metric
+		ipif, err := m.luid.IPInterface(windows.AF_INET)
+		if err == nil {
+			ipif.UseAutomaticMetric = m.originalAutoMetricV4
+			ipif.Metric = m.originalMetricV4
+			if err := ipif.Set(); err != nil {
+				log.Printf("Split tunneling: Failed to restore IPv4 interface metric: %v", err)
+			} else {
+				log.Printf("Split tunneling: Restored tunnel IPv4 interface metric to %d (auto=%v)", m.originalMetricV4, m.originalAutoMetricV4)
+			}
+		}
+		
+		// Restore IPv6 metric
+		ipif6, err := m.luid.IPInterface(windows.AF_INET6)
+		if err == nil {
+			ipif6.UseAutomaticMetric = m.originalAutoMetricV6
+			ipif6.Metric = m.originalMetricV6
+			if err := ipif6.Set(); err != nil {
+				log.Printf("Split tunneling: Failed to restore IPv6 interface metric: %v", err)
+			} else {
+				log.Printf("Split tunneling: Restored tunnel IPv6 interface metric to %d (auto=%v)", m.originalMetricV6, m.originalAutoMetricV6)
+			}
+		}
+		
+		m.metricModified = false
+	}
+	
 	return nil
 }
 
@@ -145,25 +180,67 @@ func (m *SplitTunnelingManager) applyExcludeRoutes() error {
 func (m *SplitTunnelingManager) applyIncludeRoutes() error {
 	log.Println("Split tunneling: Applying include routes (OnlyForwardSites mode)")
 
+	// Add routes for specified sites through the tunnel interface
+	// These are more specific routes, so they'll take precedence over the default route
 	for site, ips := range m.resolvedSites {
 		for _, ip := range ips {
 			var mask net.IPMask
+			var nextHop net.IP
 			if ip.To4() != nil {
 				mask = net.CIDRMask(32, 32)
+				nextHop = net.IPv4zero
 			} else {
 				mask = net.CIDRMask(128, 128)
+				nextHop = net.IPv6zero
 			}
 
 			ipnet := net.IPNet{IP: ip, Mask: mask}
 
 			// Add route through the tunnel interface (no next hop needed for on-link)
-			if err := m.luid.AddRoute(ipnet, net.IPv4zero, 0); err != nil {
+			if err := m.luid.AddRoute(ipnet, nextHop, 0); err != nil {
 				log.Printf("Split tunneling: Failed to add include route for %s (%s): %v", site, ipnet.String(), err)
 				continue
 			}
 
 			m.addedRoutes = append(m.addedRoutes, ipnet)
 			log.Printf("Split tunneling: Added include route for %s via tunnel", ipnet.String())
+		}
+	}
+
+	// For OnlyForwardSites mode, we need to ensure non-specified traffic bypasses the tunnel
+	// The tunnel has a default route (0.0.0.0/0) with metric 0
+	// We modify the tunnel interface metric to be HIGHER (1) so the physical interface's
+	// default route (metric 0) will be preferred for non-specified traffic
+	// More specific routes (the specified sites) will still match and go through tunnel
+	// because more specific routes take precedence regardless of metric
+	
+	// Modify tunnel interface metric for IPv4 to prefer physical interface's default route
+	ipif, err := m.luid.IPInterface(windows.AF_INET)
+	if err == nil {
+		m.originalMetricV4 = ipif.Metric
+		m.originalAutoMetricV4 = ipif.UseAutomaticMetric
+		ipif.UseAutomaticMetric = false
+		ipif.Metric = 1 // Higher than physical interface (typically 0)
+		if err := ipif.Set(); err != nil {
+			log.Printf("Split tunneling: Failed to set IPv4 interface metric: %v", err)
+		} else {
+			m.metricModified = true
+			log.Printf("Split tunneling: Set tunnel IPv4 interface metric to 1 (was %d, auto=%v) to prefer physical interface default route", m.originalMetricV4, m.originalAutoMetricV4)
+		}
+	}
+	
+	// Modify tunnel interface metric for IPv6 to prefer physical interface's default route
+	ipif6, err := m.luid.IPInterface(windows.AF_INET6)
+	if err == nil {
+		m.originalMetricV6 = ipif6.Metric
+		m.originalAutoMetricV6 = ipif6.UseAutomaticMetric
+		ipif6.UseAutomaticMetric = false
+		ipif6.Metric = 1 // Higher than physical interface (typically 0)
+		if err := ipif6.Set(); err != nil {
+			log.Printf("Split tunneling: Failed to set IPv6 interface metric: %v", err)
+		} else {
+			m.metricModified = true
+			log.Printf("Split tunneling: Set tunnel IPv6 interface metric to 1 (was %d, auto=%v) to prefer physical interface default route", m.originalMetricV6, m.originalAutoMetricV6)
 		}
 	}
 

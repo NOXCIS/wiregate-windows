@@ -145,11 +145,11 @@ func watchInterface() (*interfaceWatcher, error) {
 	return iw, nil
 }
 
-func (iw *interfaceWatcher) Configure(binder conn.BindSocketToInterface, conf *conf.Config, tun *tun.NativeTun) {
+func (iw *interfaceWatcher) Configure(binder conn.BindSocketToInterface, config *conf.Config, tun *tun.NativeTun) {
 	iw.setupMutex.Lock()
 	defer iw.setupMutex.Unlock()
 
-	iw.binder, iw.conf, iw.tun = binder, conf, tun
+	iw.binder, iw.conf, iw.tun = binder, config, tun
 	for _, event := range iw.storedEvents {
 		if event.luid == winipcfg.LUID(iw.tun.LUID()) {
 			iw.setup(event.family)

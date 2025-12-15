@@ -170,6 +170,45 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 		return
 	}
 
+	// Apply split tunneling configuration: ensure allowedIPs includes default routes
+	// This is required for split tunneling to work correctly - WireGuard needs to route
+	// all traffic through the tunnel, then we use route manipulation to exclude/include specific routes
+	if config.Interface.SplitTunneling != nil && config.Interface.SplitTunneling.Mode != conf.SplitModeAllSites {
+		log.Println("Split tunneling enabled - ensuring allowedIPs includes default routes")
+		for i := range config.Peers {
+			peer := &config.Peers[i]
+
+			// Check if default routes already exist
+			hasDefault4 := false
+			hasDefault6 := false
+			for _, allowedip := range peer.AllowedIPs {
+				if allowedip.Cidr == 0 {
+					if len(allowedip.IP) == 4 {
+						hasDefault4 = true
+					} else if len(allowedip.IP) == 16 {
+						hasDefault6 = true
+					}
+				}
+			}
+
+			// Add default routes if missing
+			if !hasDefault4 {
+				peer.AllowedIPs = append(peer.AllowedIPs, conf.IPCidr{
+					IP:   net.IPv4zero,
+					Cidr: 0,
+				})
+				log.Printf("Split tunneling: Added 0.0.0.0/0 to peer %d allowedIPs", i)
+			}
+			if !hasDefault6 {
+				peer.AllowedIPs = append(peer.AllowedIPs, conf.IPCidr{
+					IP:   net.IPv6zero,
+					Cidr: 0,
+				})
+				log.Printf("Split tunneling: Added ::/0 to peer %d allowedIPs", i)
+			}
+		}
+	}
+
 	// Check if any peer has UdpTlsPipe enabled and start the TLS wrapper
 	for i := range config.Peers {
 		peer := &config.Peers[i]

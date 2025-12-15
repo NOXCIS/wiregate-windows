@@ -40,6 +40,9 @@ type interfaceWatcher struct {
 	changeCallbacks4        []winipcfg.ChangeCallback
 	changeCallbacks6        []winipcfg.ChangeCallback
 	storedEvents            []interfaceWatcherEvent
+
+	// Split tunneling manager
+	splitTunnelingMgr *SplitTunnelingManager
 }
 
 func hasDefaultRoute(family winipcfg.AddressFamily, peers []conf.Peer) bool {
@@ -153,6 +156,17 @@ func (iw *interfaceWatcher) Configure(binder conn.BindSocketToInterface, conf *c
 		}
 	}
 	iw.storedEvents = nil
+
+	// Apply split tunneling if configured
+	if iw.conf.Interface.SplitTunneling != nil && iw.conf.Interface.SplitTunneling.Mode != conf.SplitModeAllSites {
+		luid := winipcfg.LUID(tun.LUID())
+		iw.splitTunnelingMgr = NewSplitTunnelingManager(luid, iw.conf.Interface.SplitTunneling)
+		if err := iw.splitTunnelingMgr.Apply(); err != nil {
+			log.Printf("Failed to apply split tunneling: %v", err)
+		} else {
+			log.Println("Split tunneling applied successfully")
+		}
+	}
 }
 
 func (iw *interfaceWatcher) Destroy() {
@@ -185,6 +199,14 @@ func (iw *interfaceWatcher) Destroy() {
 		iw.changeCallbacks6 = iw.changeCallbacks6[1:]
 		changeCallbacks6 = changeCallbacks6[1:]
 	}
+	// Clean up split tunneling routes first
+	if iw.splitTunnelingMgr != nil {
+		if err := iw.splitTunnelingMgr.Remove(); err != nil {
+			log.Printf("Failed to remove split tunneling routes: %v", err)
+		}
+		iw.splitTunnelingMgr = nil
+	}
+
 	firewall.DisableFirewall()
 	if tun != nil && iw.tun == tun {
 		// It seems that the Windows networking stack doesn't like it when we destroy interfaces that have active

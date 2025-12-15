@@ -105,6 +105,19 @@ func (conf *Config) ToWgQuick() string {
 		output.WriteString("Table = off\n")
 	}
 
+	// Split tunneling configuration
+	if conf.Interface.SplitTunneling != nil {
+		switch conf.Interface.SplitTunneling.Mode {
+		case SplitModeOnlyForwardSites:
+			output.WriteString("SplitTunnelingMode = onlyforwardsites\n")
+		case SplitModeAllExceptSites:
+			output.WriteString("SplitTunnelingMode = allexceptsites\n")
+		}
+		if len(conf.Interface.SplitTunneling.Sites) > 0 {
+			output.WriteString(fmt.Sprintf("SplitTunnelingSites = %s\n", strings.Join(conf.Interface.SplitTunneling.Sites, ", ")))
+		}
+	}
+
 	for _, peer := range conf.Peers {
 		output.WriteString("\n[Peer]\n")
 
@@ -128,6 +141,26 @@ func (conf *Config) ToWgQuick() string {
 
 		if peer.PersistentKeepalive > 0 {
 			output.WriteString(fmt.Sprintf("PersistentKeepalive = %d\n", peer.PersistentKeepalive))
+		}
+
+		// UdpTlsPipe configuration
+		if peer.UdpTlsPipe != nil && peer.UdpTlsPipe.Enabled {
+			output.WriteString("UdpTlsPipe = true\n")
+			if len(peer.UdpTlsPipe.Password) > 0 {
+				output.WriteString(fmt.Sprintf("UdpTlsPipePassword = %s\n", peer.UdpTlsPipe.Password))
+			}
+			if len(peer.UdpTlsPipe.TlsServerName) > 0 {
+				output.WriteString(fmt.Sprintf("UdpTlsPipeTlsServerName = %s\n", peer.UdpTlsPipe.TlsServerName))
+			}
+			if peer.UdpTlsPipe.Secure {
+				output.WriteString("UdpTlsPipeSecure = true\n")
+			}
+			if len(peer.UdpTlsPipe.Proxy) > 0 {
+				output.WriteString(fmt.Sprintf("UdpTlsPipeProxy = %s\n", peer.UdpTlsPipe.Proxy))
+			}
+			if len(peer.UdpTlsPipe.FingerprintProfile) > 0 {
+				output.WriteString(fmt.Sprintf("UdpTlsPipeFingerprintProfile = %s\n", peer.UdpTlsPipe.FingerprintProfile))
+			}
 		}
 	}
 	return output.String()

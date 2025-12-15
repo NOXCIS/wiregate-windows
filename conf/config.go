@@ -68,6 +68,50 @@ type Interface struct {
 	TransportPacketMagicHeader string
 
 	IPackets map[string]string
+
+	// SplitTunneling configuration
+	SplitTunneling *SplitTunnelingConfig
+}
+
+// UdpTlsPipeConfig represents the udptlspipe TLS wrapper configuration for a peer
+type UdpTlsPipeConfig struct {
+	// Enabled indicates whether udptlspipe is enabled for this peer
+	Enabled bool
+	// Password for authentication with the udptlspipe server
+	Password string
+	// TlsServerName for SNI (Server Name Indication)
+	TlsServerName string
+	// Secure enables TLS certificate verification
+	Secure bool
+	// Proxy URL (e.g., "socks5://user:pass@host:port")
+	Proxy string
+	// FingerprintProfile for TLS fingerprint evading
+	FingerprintProfile string
+}
+
+// IsValid returns true if the configuration is valid and can be used
+func (c *UdpTlsPipeConfig) IsValid() bool {
+	return c != nil && c.Enabled
+}
+
+// SplitTunnelingMode represents the split tunneling operation mode
+type SplitTunnelingMode int
+
+const (
+	// SplitModeAllSites routes all traffic through VPN (default)
+	SplitModeAllSites SplitTunnelingMode = iota
+	// SplitModeOnlyForwardSites only routes specified sites through VPN
+	SplitModeOnlyForwardSites
+	// SplitModeAllExceptSites routes all traffic except specified sites through VPN
+	SplitModeAllExceptSites
+)
+
+// SplitTunnelingConfig represents split tunneling settings
+type SplitTunnelingConfig struct {
+	// Mode specifies the split tunneling operation mode
+	Mode SplitTunnelingMode
+	// Sites is a list of IP addresses or CIDR ranges to include/exclude
+	Sites []string
 }
 
 type Peer struct {
@@ -76,6 +120,9 @@ type Peer struct {
 	AllowedIPs          []IPCidr
 	Endpoint            Endpoint
 	PersistentKeepalive uint16
+
+	// UdpTlsPipe configuration for TLS wrapping
+	UdpTlsPipe *UdpTlsPipeConfig
 
 	RxBytes           Bytes
 	TxBytes           Bytes

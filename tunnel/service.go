@@ -26,6 +26,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-windows/elevate"
 	"github.com/amnezia-vpn/amneziawg-windows/ringlogger"
 	"github.com/amnezia-vpn/amneziawg-windows/services"
+	"github.com/amnezia-vpn/amneziawg-windows/tunnel/udptlspipe"
 	"github.com/amnezia-vpn/amneziawg-windows/version"
 )
 
@@ -41,6 +42,7 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 	var watcher *interfaceWatcher
 	var nativeTun *tun.NativeTun
 	var config *conf.Config
+	var tlsPipeClient *udptlspipe.Client
 	var err error
 	serviceError := services.ErrorSuccess
 
@@ -96,6 +98,10 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 		if dev != nil {
 			dev.Close()
 		}
+		if tlsPipeClient != nil {
+			log.Println("Stopping TLS pipe client")
+			tlsPipeClient.Stop()
+		}
 		if logErr == nil && dev != nil && config != nil {
 			_ = runScriptCommand(config.Interface.PostDown, config.Name)
 		}
@@ -143,6 +149,48 @@ func (service *tunnelService) Execute(args []string, r <-chan svc.ChangeRequest,
 	if err != nil {
 		serviceError = services.ErrorSetNetConfig
 		return
+	}
+
+	// Check if any peer has UdpTlsPipe enabled and start the TLS wrapper
+	for i := range config.Peers {
+		peer := &config.Peers[i]
+		if peer.UdpTlsPipe != nil && peer.UdpTlsPipe.Enabled && !peer.Endpoint.IsEmpty() {
+			log.Printf("UdpTlsPipe is configured for peer %d", i)
+			log.Printf("Original endpoint: %s", peer.Endpoint.String())
+
+			// Create logger for TLS pipe
+			tlsLogger := udptlspipe.NewFuncLogger(func(format string, args ...interface{}) {
+				log.Printf(format, args...)
+			})
+
+			// Start the TLS pipe client
+			destination := peer.Endpoint.String()
+			tlsPipeClient, _, err = udptlspipe.NewClient(
+				destination,
+				peer.UdpTlsPipe.Password,
+				peer.UdpTlsPipe.TlsServerName,
+				peer.UdpTlsPipe.Secure,
+				peer.UdpTlsPipe.Proxy,
+				peer.UdpTlsPipe.FingerprintProfile,
+				tlsLogger,
+			)
+			if err != nil {
+				log.Printf("Failed to start UdpTlsPipe client: %v", err)
+				serviceError = services.ErrorLoadConfiguration
+				return
+			}
+
+			// Rewrite the peer endpoint to the local TLS pipe
+			localPort := tlsPipeClient.LocalPort()
+			log.Printf("UdpTlsPipe started, redirecting endpoint to 127.0.0.1:%d", localPort)
+			peer.Endpoint = conf.Endpoint{
+				Host: "127.0.0.1",
+				Port: uint16(localPort),
+			}
+
+			// Only support one TLS pipe peer for now
+			break
+		}
 	}
 
 	log.Println("Resolving DNS names")

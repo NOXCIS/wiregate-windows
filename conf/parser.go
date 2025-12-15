@@ -182,6 +182,22 @@ func parseTableOff(s string) (bool, error) {
 	return false, err
 }
 
+func parseBoolValue(s string) bool {
+	lower := strings.ToLower(s)
+	return lower == "true" || lower == "yes" || lower == "1" || lower == "on"
+}
+
+func parseSplitTunnelingMode(s string) SplitTunnelingMode {
+	switch strings.ToLower(s) {
+	case "onlyforwardsites", "only", "include":
+		return SplitModeOnlyForwardSites
+	case "allexceptsites", "except", "exclude":
+		return SplitModeAllExceptSites
+	default:
+		return SplitModeAllSites
+	}
+}
+
 func parseKeyBase64(s string) (*Key, error) {
 	k, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
@@ -414,6 +430,20 @@ func FromWgQuick(s string, name string) (*Config, error) {
 					return nil, err
 				}
 				conf.Interface.TableOff = tableOff
+			case "splittunnelingmode":
+				if conf.Interface.SplitTunneling == nil {
+					conf.Interface.SplitTunneling = &SplitTunnelingConfig{}
+				}
+				conf.Interface.SplitTunneling.Mode = parseSplitTunnelingMode(val)
+			case "splittunnelingsites":
+				if conf.Interface.SplitTunneling == nil {
+					conf.Interface.SplitTunneling = &SplitTunnelingConfig{}
+				}
+				sites, err := splitList(val)
+				if err != nil {
+					return nil, err
+				}
+				conf.Interface.SplitTunneling.Sites = append(conf.Interface.SplitTunneling.Sites, sites...)
 			default:
 				return nil, &ParseError{l18n.Sprintf("Invalid key for [Interface] section"), key}
 			}
@@ -455,6 +485,36 @@ func FromWgQuick(s string, name string) (*Config, error) {
 					return nil, err
 				}
 				peer.Endpoint = *e
+			case "udptlspipe":
+				if peer.UdpTlsPipe == nil {
+					peer.UdpTlsPipe = &UdpTlsPipeConfig{}
+				}
+				peer.UdpTlsPipe.Enabled = parseBoolValue(val)
+			case "udptlspipepassword":
+				if peer.UdpTlsPipe == nil {
+					peer.UdpTlsPipe = &UdpTlsPipeConfig{}
+				}
+				peer.UdpTlsPipe.Password = val
+			case "udptlspipetlsservername":
+				if peer.UdpTlsPipe == nil {
+					peer.UdpTlsPipe = &UdpTlsPipeConfig{}
+				}
+				peer.UdpTlsPipe.TlsServerName = val
+			case "udptlspipesecure":
+				if peer.UdpTlsPipe == nil {
+					peer.UdpTlsPipe = &UdpTlsPipeConfig{}
+				}
+				peer.UdpTlsPipe.Secure = parseBoolValue(val)
+			case "udptlspipeproxy":
+				if peer.UdpTlsPipe == nil {
+					peer.UdpTlsPipe = &UdpTlsPipeConfig{}
+				}
+				peer.UdpTlsPipe.Proxy = val
+			case "udptlspipefingerprintprofile":
+				if peer.UdpTlsPipe == nil {
+					peer.UdpTlsPipe = &UdpTlsPipeConfig{}
+				}
+				peer.UdpTlsPipe.FingerprintProfile = val
 			default:
 				return nil, &ParseError{l18n.Sprintf("Invalid key for [Peer] section"), key}
 			}

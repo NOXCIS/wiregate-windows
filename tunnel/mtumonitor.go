@@ -6,7 +6,7 @@
 package tunnel
 
 import (
-	"github.com/amnezia-vpn/amneziawg-windows/tunnel/winipcfg"
+	"github.com/NOXCIS/wiregate-windows/tunnel/winipcfg"
 	"golang.org/x/sys/windows"
 )
 

@@ -19,8 +19,8 @@ import (
 
 	"github.com/amnezia-vpn/amneziawg-go/tun"
 
-	"github.com/amnezia-vpn/amneziawg-windows/elevate"
-	"github.com/amnezia-vpn/amneziawg-windows/tunnel/winipcfg"
+	"github.com/NOXCIS/wiregate-windows/elevate"
+	"github.com/NOXCIS/wiregate-windows/tunnel/winipcfg"
 )
 
 func TestWintunOrdering(t *testing.T) {

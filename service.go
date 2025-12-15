@@ -22,11 +22,11 @@ import (
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 
-	"github.com/amnezia-vpn/amneziawg-windows/conf"
-	"github.com/amnezia-vpn/amneziawg-windows/elevate"
-	"github.com/amnezia-vpn/amneziawg-windows/ringlogger"
-	"github.com/amnezia-vpn/amneziawg-windows/services"
-	"github.com/amnezia-vpn/amneziawg-windows/version"
+	"github.com/NOXCIS/wiregate-windows/conf"
+	"github.com/NOXCIS/wiregate-windows/elevate"
+	"github.com/NOXCIS/wiregate-windows/ringlogger"
+	"github.com/NOXCIS/wiregate-windows/services"
+	"github.com/NOXCIS/wiregate-windows/version"
 )
 
 type tunnelService struct {

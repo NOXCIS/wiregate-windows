@@ -1,4 +1,4 @@
-module github.com/amnezia-vpn/amneziawg-windows
+module github.com/NOXCIS/wiregate-windows
 
 go 1.24.4
 

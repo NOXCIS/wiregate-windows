@@ -14,9 +14,9 @@ import (
 	"github.com/amnezia-vpn/amneziawg-go/tun"
 	"golang.org/x/sys/windows"
 
-	"github.com/amnezia-vpn/amneziawg-windows/conf"
-	"github.com/amnezia-vpn/amneziawg-windows/tunnel/firewall"
-	"github.com/amnezia-vpn/amneziawg-windows/tunnel/winipcfg"
+	"github.com/NOXCIS/wiregate-windows/conf"
+	"github.com/NOXCIS/wiregate-windows/tunnel/firewall"
+	"github.com/NOXCIS/wiregate-windows/tunnel/winipcfg"
 )
 
 func cleanupAddressesOnDisconnectedInterfaces(family winipcfg.AddressFamily, addresses []net.IPNet) {

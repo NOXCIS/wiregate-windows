@@ -12,8 +12,8 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/amnezia-vpn/amneziawg-windows/conf"
-	"github.com/amnezia-vpn/amneziawg-windows/tunnel/winipcfg"
+	"github.com/NOXCIS/wiregate-windows/conf"
+	"github.com/NOXCIS/wiregate-windows/tunnel/winipcfg"
 )
 
 // SplitTunnelingManager handles split tunneling route configuration

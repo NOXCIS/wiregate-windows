@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/amnezia-vpn/amneziawg-windows/conf"
+	"github.com/NOXCIS/wiregate-windows/conf"
 )
 
 func runScriptCommand(command, interfaceName string) error {

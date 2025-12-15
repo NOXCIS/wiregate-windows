@@ -19,7 +19,7 @@ import (
 
 	"golang.org/x/text/encoding/unicode"
 
-	"github.com/amnezia-vpn/amneziawg-windows/l18n"
+	"github.com/NOXCIS/wiregate-windows/l18n"
 )
 
 var _specialHandshakeTags = map[string]struct{}{
